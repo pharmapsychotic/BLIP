@@ -31,28 +31,28 @@ from data.utils import save_result, coco_caption_eval
 def train(model, data_loader, optimizer, epoch, device):
     # train
     model.train()  
-    
+
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     metric_logger.add_meter('loss', utils.SmoothedValue(window_size=1, fmt='{value:.4f}'))
-    header = 'Train Caption Epoch: [{}]'.format(epoch)
+    header = f'Train Caption Epoch: [{epoch}]'
     print_freq = 50
 
-    for i, (image, caption, _) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for image, caption, _ in metric_logger.log_every(data_loader, print_freq, header):
         image = image.to(device)       
-        
+
         loss = model(image, caption)      
-        
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()    
-        
+
         metric_logger.update(loss=loss.item())
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger.global_avg())     
+    print("Averaged stats:", metric_logger.global_avg())
     return {k: "{:.3f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}  
 
 
@@ -60,7 +60,7 @@ def train(model, data_loader, optimizer, epoch, device):
 def evaluate(model, data_loader, device, config):
     # evaluate
     model.eval() 
-    
+
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Caption generation:'
     print_freq = 10
@@ -69,13 +69,15 @@ def evaluate(model, data_loader, device, config):
     for image, image_id in metric_logger.log_every(data_loader, print_freq, header): 
         
         image = image.to(device)       
-        
+
         captions = model.generate(image, sample=False, num_beams=config['num_beams'], max_length=config['max_length'], 
                                   min_length=config['min_length'])
-        
-        for caption, img_id in zip(captions, image_id):
-            result.append({"image_id": img_id.item(), "caption": caption})
-  
+
+        result.extend(
+            {"image_id": img_id.item(), "caption": caption}
+            for caption, img_id in zip(captions, image_id)
+        )
+
     return result
 
 

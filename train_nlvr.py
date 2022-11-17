@@ -33,32 +33,31 @@ from data import create_dataset, create_sampler, create_loader
 def train(model, data_loader, optimizer, epoch, device, config):
     # train
     model.train()  
-    
+
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=50, fmt='{value:.6f}'))
     metric_logger.add_meter('loss', utils.SmoothedValue(window_size=50, fmt='{value:.4f}'))
 
-    header = 'Train Epoch: [{}]'.format(epoch)
-    print_freq = 50   
+    header = f'Train Epoch: [{epoch}]'
+    print_freq = 50
     step_size = 10
- 
-    for i,(image0, image1, text, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
-  
+
+    for image0, image1, text, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = torch.cat([image0, image1], dim=0)
         images, targets = images.to(device), targets.to(device)   
 
         loss = model(images, text, targets=targets, train=True)    
-        
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()    
-               
+
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(loss=loss.item())  
-        
+
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger.global_avg())     
+    print("Averaged stats:", metric_logger.global_avg())
     return {k: "{:.4f}".format(meter.global_avg) for k, meter in metric_logger.meters.items()}    
 
 
@@ -66,7 +65,7 @@ def train(model, data_loader, optimizer, epoch, device, config):
 def evaluate(model, data_loader, device, config):
     # test
     model.eval()
-            
+
     metric_logger = utils.MetricLogger(delimiter="  ")
 
     header = 'Evaluation:'
@@ -75,12 +74,12 @@ def evaluate(model, data_loader, device, config):
     for image0, image1, text, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = torch.cat([image0, image1], dim=0)
         images, targets = images.to(device), targets.to(device)   
-        
+
         prediction = model(images, text, targets=targets, train=False)  
- 
+
         _, pred_class = prediction.max(1)
         accuracy = (targets==pred_class).sum() / targets.size(0)
-        
+
         metric_logger.meters['acc'].update(accuracy.item(), n=image0.size(0))
 
     # gather the stats from all processes

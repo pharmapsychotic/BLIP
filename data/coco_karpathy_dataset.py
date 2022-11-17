@@ -18,13 +18,13 @@ class coco_karpathy_train(Dataset):
         filename = 'coco_karpathy_train.json'
 
         download_url(url,ann_root)
-        
+
         self.annotation = json.load(open(os.path.join(ann_root,filename),'r'))
         self.transform = transform
         self.image_root = image_root
         self.max_words = max_words      
         self.prompt = prompt
-        
+
         self.img_ids = {}  
         n = 0
         for ann in self.annotation:
@@ -59,9 +59,9 @@ class coco_karpathy_caption_eval(Dataset):
         urls = {'val':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val.json',
                 'test':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test.json'}
         filenames = {'val':'coco_karpathy_val.json','test':'coco_karpathy_test.json'}
-        
+
         download_url(urls[split],ann_root)
-        
+
         self.annotation = json.load(open(os.path.join(ann_root,filenames[split]),'r'))
         self.transform = transform
         self.image_root = image_root
@@ -83,7 +83,7 @@ class coco_karpathy_caption_eval(Dataset):
     
     
 class coco_karpathy_retrieval_eval(Dataset):
-    def __init__(self, transform, image_root, ann_root, split, max_words=30):  
+    def __init__(self, transform, image_root, ann_root, split, max_words=30):
         '''
         image_root (string): Root directory of images (e.g. coco/images/)
         ann_root (string): directory to store the annotation file
@@ -92,23 +92,23 @@ class coco_karpathy_retrieval_eval(Dataset):
         urls = {'val':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val.json',
                 'test':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test.json'}
         filenames = {'val':'coco_karpathy_val.json','test':'coco_karpathy_test.json'}
-        
+
         download_url(urls[split],ann_root)
-        
+
         self.annotation = json.load(open(os.path.join(ann_root,filenames[split]),'r'))
         self.transform = transform
         self.image_root = image_root
-        
+
         self.text = []
         self.image = []
         self.txt2img = {}
         self.img2txt = {}
-        
+
         txt_id = 0
         for img_id, ann in enumerate(self.annotation):
             self.image.append(ann['image'])
             self.img2txt[img_id] = []
-            for i, caption in enumerate(ann['caption']):
+            for caption in ann['caption']:
                 self.text.append(pre_caption(caption,max_words))
                 self.img2txt[img_id].append(txt_id)
                 self.txt2img[txt_id] = img_id

@@ -106,23 +106,20 @@ class MetricLogger(object):
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
-        raise AttributeError("'{}' object has no attribute '{}'".format(
-            type(self).__name__, attr))
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{attr}'"
+        )
 
     def __str__(self):
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {}".format(name, str(meter))
-            )
+        loss_str = [f"{name}: {str(meter)}" for name, meter in self.meters.items()]
         return self.delimiter.join(loss_str)
 
     def global_avg(self):
-        loss_str = []
-        for name, meter in self.meters.items():
-            loss_str.append(
-                "{}: {:.4f}".format(name, meter.global_avg)
-            )
+        loss_str = [
+            "{}: {:.4f}".format(name, meter.global_avg)
+            for name, meter in self.meters.items()
+        ]
+
         return self.delimiter.join(loss_str)    
     
     def synchronize_between_processes(self):
@@ -133,14 +130,13 @@ class MetricLogger(object):
         self.meters[name] = meter
 
     def log_every(self, iterable, print_freq, header=None):
-        i = 0
         if not header:
             header = ''
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
-        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
+        space_fmt = f':{len(str(len(iterable)))}d'
         log_msg = [
             header,
             '[{0' + space_fmt + '}/{1}]',
@@ -153,7 +149,7 @@ class MetricLogger(object):
             log_msg.append('max mem: {memory:.0f}')
         log_msg = self.delimiter.join(log_msg)
         MB = 1024.0 * 1024.0
-        for obj in iterable:
+        for i, obj in enumerate(iterable):
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
@@ -171,7 +167,6 @@ class MetricLogger(object):
                         i, len(iterable), eta=eta_string,
                         meters=str(self),
                         time=str(iter_time), data=str(data_time)))
-            i += 1
             end = time.time()
         total_time = time.time() - start_time
         total_time_str = str(datetime.timedelta(seconds=int(total_time)))
@@ -199,13 +194,12 @@ def compute_n_params(model, return_str=True):
         for x in p.shape:
             w *= x
         tot += w
-    if return_str:
-        if tot >= 1e6:
-            return '{:.1f}M'.format(tot / 1e6)
-        else:
-            return '{:.1f}K'.format(tot / 1e3)
-    else:
+    if not return_str:
         return tot
+    if tot >= 1e6:
+        return '{:.1f}M'.format(tot / 1e6)
+    else:
+        return '{:.1f}K'.format(tot / 1e3)
 
 def setup_for_distributed(is_master):
     """
@@ -223,23 +217,15 @@ def setup_for_distributed(is_master):
 
 
 def is_dist_avail_and_initialized():
-    if not dist.is_available():
-        return False
-    if not dist.is_initialized():
-        return False
-    return True
+    return bool(dist.is_initialized()) if dist.is_available() else False
 
 
 def get_world_size():
-    if not is_dist_avail_and_initialized():
-        return 1
-    return dist.get_world_size()
+    return dist.get_world_size() if is_dist_avail_and_initialized() else 1
 
 
 def get_rank():
-    if not is_dist_avail_and_initialized():
-        return 0
-    return dist.get_rank()
+    return dist.get_rank() if is_dist_avail_and_initialized() else 0
 
 
 def is_main_process():
@@ -268,8 +254,11 @@ def init_distributed_mode(args):
 
     torch.cuda.set_device(args.gpu)
     args.dist_backend = 'nccl'
-    print('| distributed init (rank {}, word {}): {}'.format(
-        args.rank, args.world_size, args.dist_url), flush=True)
+    print(
+        f'| distributed init (rank {args.rank}, word {args.world_size}): {args.dist_url}',
+        flush=True,
+    )
+
     torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                          world_size=args.world_size, rank=args.rank)
     torch.distributed.barrier()

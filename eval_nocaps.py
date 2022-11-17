@@ -31,7 +31,7 @@ from data.utils import save_result
 def evaluate(model, data_loader, device, config):
     # evaluate
     model.eval() 
-    
+
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Evaluation:'
     print_freq = 10
@@ -40,13 +40,15 @@ def evaluate(model, data_loader, device, config):
     for image, image_id in metric_logger.log_every(data_loader, print_freq, header): 
         
         image = image.to(device)       
-        
+
         captions = model.generate(image, sample=False, num_beams=config['num_beams'], max_length=config['max_length'], 
                                   min_length=config['min_length'], repetition_penalty=1.1)
-        
-        for caption, img_id in zip(captions, image_id):
-            result.append({"image_id": img_id.item(), "caption": caption})
-  
+
+        result.extend(
+            {"image_id": img_id.item(), "caption": caption}
+            for caption, img_id in zip(captions, image_id)
+        )
+
     return result
 
 

@@ -97,24 +97,24 @@ class BLIP_Pretrain(nn.Module):
     def forward(self, image, caption, alpha):
         with torch.no_grad():
             self.temp.clamp_(0.001,0.5)
-        
+
         image_embeds = self.visual_encoder(image) 
         image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
         image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)          
-        
+
         text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=30, 
                               return_tensors="pt").to(image.device)  
         text_output = self.text_encoder(text.input_ids, attention_mask = text.attention_mask,                      
                                         return_dict = True, mode = 'text')            
         text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]),dim=-1)                 
-             
+
         # get momentum features
         with torch.no_grad():
             self._momentum_update()
             image_embeds_m = self.visual_encoder_m(image) 
             image_feat_m = F.normalize(self.vision_proj_m(image_embeds_m[:,0,:]),dim=-1)  
             image_feat_all = torch.cat([image_feat_m.t(),self.image_queue.clone().detach()],dim=1)                   
-            
+
             text_output_m = self.text_encoder_m(text.input_ids, attention_mask = text.attention_mask,                      
                                                 return_dict = True, mode = 'text')    
             text_feat_m = F.normalize(self.text_proj_m(text_output_m.last_hidden_state[:,0,:]),dim=-1) 
@@ -131,7 +131,7 @@ class BLIP_Pretrain(nn.Module):
 
         sim_i2t = image_feat @ text_feat_all / self.temp
         sim_t2i = text_feat @ image_feat_all / self.temp
-                             
+
         loss_i2t = -torch.sum(F.log_softmax(sim_i2t, dim=1)*sim_i2t_targets,dim=1).mean()
         loss_t2i = -torch.sum(F.log_softmax(sim_t2i, dim=1)*sim_t2i_targets,dim=1).mean() 
 
@@ -142,7 +142,7 @@ class BLIP_Pretrain(nn.Module):
         ###============== Image-text Matching ===================###
         encoder_input_ids = text.input_ids.clone()
         encoder_input_ids[:,0] = self.tokenizer.enc_token_id
-        
+
         # forward the positve image-text pair
         bs = image.size(0)
         output_pos = self.text_encoder(encoder_input_ids,
@@ -156,7 +156,7 @@ class BLIP_Pretrain(nn.Module):
             weights_t2i.fill_diagonal_(0)            
             weights_i2t = F.softmax(sim_i2t[:,:bs],dim=1)+1e-4  
             weights_i2t.fill_diagonal_(0)   
-            
+
         # select a negative image for each text
         image_embeds_neg = []    
         for b in range(bs):
@@ -194,7 +194,7 @@ class BLIP_Pretrain(nn.Module):
         itm_labels = torch.cat([torch.ones(bs,dtype=torch.long),torch.zeros(2*bs,dtype=torch.long)],
                                dim=0).to(image.device)
         loss_itm = F.cross_entropy(vl_output, itm_labels)  
-        
+
         ##================= LM ========================##     
         decoder_input_ids = text.input_ids.clone()      
         decoder_input_ids[:,0] = self.tokenizer.bos_token_id
@@ -207,7 +207,7 @@ class BLIP_Pretrain(nn.Module):
                                            labels = decoder_targets,
                                            return_dict = True,   
                                           )   
-          
+
         loss_lm = decoder_output.loss                
         return loss_ita, loss_itm, loss_lm
  
@@ -248,8 +248,7 @@ class BLIP_Pretrain(nn.Module):
 
 
 def blip_pretrain(**kwargs):
-    model = BLIP_Pretrain(**kwargs)
-    return model 
+    return BLIP_Pretrain(**kwargs) 
 
 
 @torch.no_grad()
@@ -262,8 +261,7 @@ def concat_all_gather(tensor):
         for _ in range(torch.distributed.get_world_size())]
     torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
 
-    output = torch.cat(tensors_gather, dim=0)
-    return output     
+    return torch.cat(tensors_gather, dim=0)     
 
 
 from typing import List
@@ -275,13 +273,13 @@ def tie_encoder_decoder_weights(encoder: nn.Module, decoder: nn.Module, base_mod
         )
 
     def tie_encoder_to_decoder_recursively(
-        decoder_pointer: nn.Module,
-        encoder_pointer: nn.Module,
-        module_name: str,
-        uninitialized_encoder_weights: List[str],
-        skip_key: str,
-        depth=0,
-    ):
+            decoder_pointer: nn.Module,
+            encoder_pointer: nn.Module,
+            module_name: str,
+            uninitialized_encoder_weights: List[str],
+            skip_key: str,
+            depth=0,
+        ):
         assert isinstance(decoder_pointer, nn.Module) and isinstance(
             encoder_pointer, nn.Module
         ), f"{decoder_pointer} and {encoder_pointer} have to be of type torch.nn.Module"
@@ -290,8 +288,8 @@ def tie_encoder_decoder_weights(encoder: nn.Module, decoder: nn.Module, base_mod
             encoder_pointer.weight = decoder_pointer.weight
             if hasattr(decoder_pointer, "bias"):
                 assert hasattr(encoder_pointer, "bias")
-                encoder_pointer.bias = decoder_pointer.bias                
-            print(module_name+' is tied')    
+                encoder_pointer.bias = decoder_pointer.bias
+            print(f'{module_name} is tied')
             return
 
         encoder_modules = encoder_pointer._modules
@@ -301,7 +299,11 @@ def tie_encoder_decoder_weights(encoder: nn.Module, decoder: nn.Module, base_mod
                 len(encoder_modules) > 0
             ), f"Encoder module {encoder_pointer} does not match decoder module {decoder_pointer}"
 
-            all_encoder_weights = set([module_name + "/" + sub_name for sub_name in encoder_modules.keys()])
+            all_encoder_weights = {
+                f"{module_name}/{sub_name}"
+                for sub_name in encoder_modules.keys()
+            }
+
             encoder_layer_pos = 0
             for name, module in decoder_modules.items():
                 if name.isdigit():
@@ -326,12 +328,13 @@ def tie_encoder_decoder_weights(encoder: nn.Module, decoder: nn.Module, base_mod
                 tie_encoder_to_decoder_recursively(
                     decoder_modules[decoder_name],
                     encoder_modules[encoder_name],
-                    module_name + "/" + name,
+                    f"{module_name}/{name}",
                     uninitialized_encoder_weights,
                     skip_key,
                     depth=depth + 1,
                 )
-                all_encoder_weights.remove(module_name + "/" + encoder_name)
+
+                all_encoder_weights.remove(f"{module_name}/{encoder_name}")
 
             uninitialized_encoder_weights += list(all_encoder_weights)
 

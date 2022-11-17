@@ -40,13 +40,13 @@ class BLIP_ITM(nn.Module):
         
     def forward(self, image, caption, match_head='itm'):
 
-        image_embeds = self.visual_encoder(image) 
+        image_embeds = self.visual_encoder(image)
         image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
-      
+
         text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=35, 
                               return_tensors="pt").to(image.device) 
 
-                 
+
         if match_head=='itm':
             output = self.text_encoder(text.input_ids,
                                        attention_mask = text.attention_mask,
@@ -54,17 +54,14 @@ class BLIP_ITM(nn.Module):
                                        encoder_attention_mask = image_atts,      
                                        return_dict = True,
                                       )
-            itm_output = self.itm_head(output.last_hidden_state[:,0,:])     
-            return itm_output
-            
+            return self.itm_head(output.last_hidden_state[:,0,:])
         elif match_head=='itc':
             text_output = self.text_encoder(text.input_ids, attention_mask = text.attention_mask,                      
-                                            return_dict = True, mode = 'text')                     
-            image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)   
+                                            return_dict = True, mode = 'text')
+            image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)
             text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]),dim=-1)    
-            
-            sim = image_feat @ text_feat.t()
-            return sim
+
+            return image_feat @ text_feat.t()
         
         
 def blip_itm(pretrained='',**kwargs):

@@ -262,7 +262,7 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
 #         model.pre_logits.fc.bias.copy_(_n2p(w[f'{prefix}pre_logits/bias']))
     for i, block in enumerate(model.blocks.children()):
         block_prefix = f'{prefix}Transformer/encoderblock_{i}/'
-        mha_prefix = block_prefix + 'MultiHeadDotProductAttention_1/'
+        mha_prefix = f'{block_prefix}MultiHeadDotProductAttention_1/'
         block.norm1.weight.copy_(_n2p(w[f'{block_prefix}LayerNorm_0/scale']))
         block.norm1.bias.copy_(_n2p(w[f'{block_prefix}LayerNorm_0/bias']))
         block.attn.qkv.weight.copy_(torch.cat([
@@ -279,8 +279,6 @@ def _load_weights(model: VisionTransformer, checkpoint_path: str, prefix: str = 
 
             
 def interpolate_pos_embed(pos_embed_checkpoint, visual_encoder):        
-    # interpolate position embedding
-    embedding_size = pos_embed_checkpoint.shape[-1]
     num_patches = visual_encoder.patch_embed.num_patches
     num_extra_tokens = visual_encoder.pos_embed.shape[-2] - num_patches
     # height (== width) for the checkpoint position embedding
@@ -288,18 +286,19 @@ def interpolate_pos_embed(pos_embed_checkpoint, visual_encoder):
     # height (== width) for the new position embedding
     new_size = int(num_patches ** 0.5)
 
-    if orig_size!=new_size:
-        # class_token and dist_token are kept unchanged
-        extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
-        # only the position tokens are interpolated
-        pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
-        pos_tokens = pos_tokens.reshape(-1, orig_size, orig_size, embedding_size).permute(0, 3, 1, 2)
-        pos_tokens = torch.nn.functional.interpolate(
-            pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
-        pos_tokens = pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
-        new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
-        print('reshape position embedding from %d to %d'%(orig_size ** 2,new_size ** 2))
-        
-        return new_pos_embed    
-    else:
+    if orig_size == new_size:
         return pos_embed_checkpoint
+    # class_token and dist_token are kept unchanged
+    extra_tokens = pos_embed_checkpoint[:, :num_extra_tokens]
+    # only the position tokens are interpolated
+    pos_tokens = pos_embed_checkpoint[:, num_extra_tokens:]
+    # interpolate position embedding
+    embedding_size = pos_embed_checkpoint.shape[-1]
+    pos_tokens = pos_tokens.reshape(-1, orig_size, orig_size, embedding_size).permute(0, 3, 1, 2)
+    pos_tokens = torch.nn.functional.interpolate(
+        pos_tokens, size=(new_size, new_size), mode='bicubic', align_corners=False)
+    pos_tokens = pos_tokens.permute(0, 2, 3, 1).flatten(1, 2)
+    new_pos_embed = torch.cat((extra_tokens, pos_tokens), dim=1)
+    print('reshape position embedding from %d to %d'%(orig_size ** 2,new_size ** 2))
+
+    return new_pos_embed
