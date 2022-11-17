@@ -46,8 +46,8 @@ def pre_question(question,max_ques_words=50):
 
 def save_result(result, result_dir, filename, remove_duplicate=''):
     result_file = os.path.join(result_dir, '%s_rank%d.json'%(filename,utils.get_rank()))
-    final_result_file = os.path.join(result_dir, '%s.json'%filename)
-    
+    final_result_file = os.path.join(result_dir, f'{filename}.json')
+
     json.dump(result,open(result_file,'w'))
 
     dist.barrier()
@@ -69,9 +69,9 @@ def save_result(result, result_dir, filename, remove_duplicate=''):
                     id_list.append(res[remove_duplicate])
                     result_new.append(res)
             result = result_new             
-                
-        json.dump(result,open(final_result_file,'w'))            
-        print('result file saved to %s'%final_result_file)
+
+        json.dump(result,open(final_result_file,'w'))
+        print(f'result file saved to {final_result_file}')
 
     return final_result_file
 
@@ -85,10 +85,10 @@ def coco_caption_eval(coco_gt_root, results_file, split):
     urls = {'val':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_val_gt.json',
             'test':'https://storage.googleapis.com/sfr-vision-language-research/datasets/coco_karpathy_test_gt.json'}
     filenames = {'val':'coco_karpathy_val_gt.json','test':'coco_karpathy_test_gt.json'}    
-    
+
     download_url(urls[split],coco_gt_root)
     annotation_file = os.path.join(coco_gt_root,filenames[split])
-    
+
     # create coco object and coco_result object
     coco = COCO(annotation_file)
     coco_result = coco.loadRes(results_file)
@@ -108,5 +108,5 @@ def coco_caption_eval(coco_gt_root, results_file, split):
     # print output evaluation scores
     for metric, score in coco_eval.eval.items():
         print(f'{metric}: {score:.3f}')
-    
+
     return coco_eval

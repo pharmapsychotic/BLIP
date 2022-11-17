@@ -11,9 +11,9 @@ class nocaps_eval(Dataset):
         urls = {'val':'https://storage.googleapis.com/sfr-vision-language-research/datasets/nocaps_val.json',
                 'test':'https://storage.googleapis.com/sfr-vision-language-research/datasets/nocaps_test.json'}
         filenames = {'val':'nocaps_val.json','test':'nocaps_test.json'}
-        
+
         download_url(urls[split],ann_root)
-        
+
         self.annotation = json.load(open(os.path.join(ann_root,filenames[split]),'r'))
         self.transform = transform
         self.image_root = image_root

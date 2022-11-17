@@ -43,7 +43,7 @@ class VideoDataset(Dataset):
 
         download_url(url,ann_root)
         self.annotation = load_jsonl(os.path.join(ann_root,filename))
-        
+
         self.num_frm = num_frm
         self.frm_sampling_strategy = frm_sampling_strategy
         self.max_img_size = max_img_size
@@ -52,7 +52,7 @@ class VideoDataset(Dataset):
         self.img_norm = ImageNorm(mean=(0.48145466, 0.4578275, 0.40821073), std=(0.26862954, 0.26130258, 0.27577711))
 
         self.text = [pre_caption(ann['caption'],40) for ann in self.annotation]
-        self.txt2video = [i for i in range(len(self.annotation))]
+        self.txt2video = list(range(len(self.annotation)))
         self.video2txt = self.txt2video               
             
             
@@ -99,7 +99,10 @@ class VideoDataset(Dataset):
                 frame_indices_tail = sorted(random.sample(range(vlen // 2, vlen), self.num_frm // 2))
                 frame_indices = frame_indices_head + frame_indices_tail
             else:
-                raise NotImplementedError('Invalid sampling strategy {} '.format(self.frm_sampling_strategy))
+                raise NotImplementedError(
+                    f'Invalid sampling strategy {self.frm_sampling_strategy} '
+                )
+
 
             raw_sample_frms = vr.get_batch(frame_indices)
         except Exception as e:

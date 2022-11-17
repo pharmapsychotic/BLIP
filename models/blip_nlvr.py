@@ -41,11 +41,11 @@ class BLIP_NLVR(nn.Module):
 
     def forward(self, image, text, targets, train=True):
         
-        image_embeds = self.visual_encoder(image) 
-        image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
+        image_embeds = self.visual_encoder(image)
+        image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)
         image0_embeds, image1_embeds = torch.split(image_embeds,targets.size(0))     
 
-        text = self.tokenizer(text, padding='longest', return_tensors="pt").to(image.device) 
+        text = self.tokenizer(text, padding='longest', return_tensors="pt").to(image.device)
         text.input_ids[:,0] = self.tokenizer.enc_token_id        
 
         output = self.text_encoder(text.input_ids, 
@@ -54,15 +54,11 @@ class BLIP_NLVR(nn.Module):
                                    encoder_attention_mask = [image_atts[:image0_embeds.size(0)],
                                                              image_atts[image0_embeds.size(0):]],        
                                    return_dict = True,
-                                  )  
-        hidden_state = output.last_hidden_state[:,0,:]        
+                                  )
+        hidden_state = output.last_hidden_state[:,0,:]
         prediction = self.cls_head(hidden_state)
 
-        if train:            
-            loss = F.cross_entropy(prediction, targets)   
-            return loss
-        else:
-            return prediction
+        return F.cross_entropy(prediction, targets) if train else prediction
     
 def blip_nlvr(pretrained='',**kwargs):
     model = BLIP_NLVR(**kwargs)
@@ -82,9 +78,9 @@ def load_checkpoint(model,url_or_filename):
     else:
         raise RuntimeError('checkpoint url or path is invalid')
     state_dict = checkpoint['model']
-    
+
     state_dict['visual_encoder.pos_embed'] = interpolate_pos_embed(state_dict['visual_encoder.pos_embed'],model.visual_encoder) 
-    
+
     for key in list(state_dict.keys()):
         if 'crossattention.self.' in key:
             new_key0 = key.replace('self','self0')
@@ -96,8 +92,8 @@ def load_checkpoint(model,url_or_filename):
             new_key1 = key.replace('dense','dense1')
             state_dict[new_key0] = state_dict[key]
             state_dict[new_key1] = state_dict[key]  
-                
+
     msg = model.load_state_dict(state_dict,strict=False)
-    print('load checkpoint from %s'%url_or_filename)  
+    print(f'load checkpoint from {url_or_filename}')
     return model,msg
             

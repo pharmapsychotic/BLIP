@@ -16,20 +16,20 @@ class vqa_dataset(Dataset):
         self.transform = transform
         self.vqa_root = vqa_root
         self.vg_root = vg_root
-        
+
         if split=='train':
             urls = {'vqa_train':'https://storage.googleapis.com/sfr-vision-language-research/datasets/vqa_train.json',
                     'vqa_val':'https://storage.googleapis.com/sfr-vision-language-research/datasets/vqa_val.json',
                     'vg_qa':'https://storage.googleapis.com/sfr-vision-language-research/datasets/vg_qa.json'}
-        
+
             self.annotation = []
             for f in train_files:
                 download_url(urls[f],ann_root)
-                self.annotation += json.load(open(os.path.join(ann_root,'%s.json'%f),'r'))
+                self.annotation += json.load(open(os.path.join(ann_root, f'{f}.json'), 'r'))
         else:
             download_url('https://storage.googleapis.com/sfr-vision-language-research/datasets/vqa_test.json',ann_root)
             self.annotation = json.load(open(os.path.join(ann_root,'vqa_test.json'),'r'))    
-            
+
             download_url('https://storage.googleapis.com/sfr-vision-language-research/datasets/answer_list.json',ann_root)
             self.answer_list = json.load(open(os.path.join(ann_root,'answer_list.json'),'r'))    
                 
@@ -40,29 +40,29 @@ class vqa_dataset(Dataset):
     def __getitem__(self, index):    
         
         ann = self.annotation[index]
-        
+
         if ann['dataset']=='vqa':
             image_path = os.path.join(self.vqa_root,ann['image'])    
         elif ann['dataset']=='vg':
             image_path = os.path.join(self.vg_root,ann['image'])  
-            
-        image = Image.open(image_path).convert('RGB')   
+
+        image = Image.open(image_path).convert('RGB')
         image = self.transform(image)          
-        
+
         if self.split == 'test':
             question = pre_question(ann['question'])   
             question_id = ann['question_id']            
             return image, question, question_id
 
 
-        elif self.split=='train':                       
+        elif self.split=='train':                   
             
             question = pre_question(ann['question'])        
-            
-            if ann['dataset']=='vqa':               
+
+            if ann['dataset']=='vqa':       
                 answer_weight = {}
                 for answer in ann['answer']:
-                    if answer in answer_weight.keys():
+                    if answer in answer_weight:
                         answer_weight[answer] += 1/len(ann['answer'])
                     else:
                         answer_weight[answer] = 1/len(ann['answer'])

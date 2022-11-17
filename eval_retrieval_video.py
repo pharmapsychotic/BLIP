@@ -31,18 +31,18 @@ from data.video_dataset import VideoDataset
 def evaluation(model, data_loader, tokenizer, device, config):
     # test
     model.eval() 
-    
+
     metric_logger = utils.MetricLogger(delimiter="  ")
     header = 'Evaluation:'    
-    
+
     print('Computing features for evaluation...')
     start_time = time.time()  
 
-    texts = data_loader.dataset.text   
+    texts = data_loader.dataset.text
     num_text = len(texts)
     text_bs = 256
     text_ids = []
-    text_embeds = []  
+    text_embeds = []
     text_atts = []
     for i in range(0, num_text, text_bs):
         text = texts[i: min(num_text, i+text_bs)]
@@ -52,12 +52,12 @@ def evaluation(model, data_loader, tokenizer, device, config):
         text_embeds.append(text_embed)   
         text_ids.append(text_input.input_ids)
         text_atts.append(text_input.attention_mask)
-    
+
     text_embeds = torch.cat(text_embeds,dim=0)
     text_ids = torch.cat(text_ids,dim=0)
     text_atts = torch.cat(text_atts,dim=0)
     text_ids[:,0] = tokenizer.additional_special_tokens_ids[0]
-    
+
     video_feats = []
     video_embeds = []
     for video, video_id in data_loader: 
@@ -69,26 +69,26 @@ def evaluation(model, data_loader, tokenizer, device, config):
         video_embed = model.vision_proj(video_feat[:,0,:])   
         video_embed = video_embed.view(B,N,-1).mean(dim=1)
         video_embed = F.normalize(video_embed,dim=-1)  
-       
+
         video_feat = video_feat.view(B,-1,video_feat.shape[-1])
         video_feats.append(video_feat.cpu())
         video_embeds.append(video_embed)
-     
+
     video_feats = torch.cat(video_feats,dim=0)
     video_embeds = torch.cat(video_embeds,dim=0)
-    
+
     sims_matrix = video_embeds @ text_embeds.t()
     score_matrix_v2t = torch.full((len(texts),len(texts)),-100.0).to(device) 
-    
+
     num_tasks = utils.get_world_size()
-    rank = utils.get_rank() 
+    rank = utils.get_rank()
     step = sims_matrix.size(0)//num_tasks + 1
     start = rank*step
     end = min(sims_matrix.size(0),start+step)
 
     for i,sims in enumerate(metric_logger.log_every(sims_matrix[start:end], 50, header)): 
         topk_sim, topk_idx = sims.topk(k=config['k_test'], dim=0)
-        
+
         encoder_output = video_feats[start+i].repeat(config['k_test'],1,1).to(device,non_blocking=True) 
         encoder_att = torch.ones(encoder_output.size()[:-1],dtype=torch.long).to(device,non_blocking=True) 
         output = model.text_encoder(text_ids[topk_idx], 
@@ -99,16 +99,16 @@ def evaluation(model, data_loader, tokenizer, device, config):
                                    )
         score = model.itm_head(output.last_hidden_state[:,0,:])[:,1]
         score_matrix_v2t[start+i,topk_idx] = score + topk_sim
-        
+
     sims_matrix = sims_matrix.t()
     score_matrix_t2v = torch.full((len(texts),len(texts)),-100.0).to(device) 
-    
+
     step = sims_matrix.size(0)//num_tasks + 1
     start = rank*step
     end = min(sims_matrix.size(0),start+step)    
-    
+
     for i,sims in enumerate(metric_logger.log_every(sims_matrix[start:end], 50, header)): 
-        
+
         topk_sim, topk_idx = sims.topk(k=config['k_test'], dim=0)
         encoder_output = video_feats[topk_idx].to(device,non_blocking=True) 
         encoder_att = torch.ones(encoder_output.size()[:-1],dtype=torch.long).to(device,non_blocking=True) 
@@ -125,10 +125,10 @@ def evaluation(model, data_loader, tokenizer, device, config):
         dist.barrier()   
         torch.distributed.all_reduce(score_matrix_v2t, op=torch.distributed.ReduceOp.SUM) 
         torch.distributed.all_reduce(score_matrix_t2v, op=torch.distributed.ReduceOp.SUM)        
-        
+
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
-    print('Evaluation time {}'.format(total_time_str)) 
+    print(f'Evaluation time {total_time_str}') 
 
     return score_matrix_v2t.cpu().numpy(), score_matrix_t2v.cpu().numpy()
 
@@ -147,16 +147,16 @@ def itm_eval(scores_v2t, scores_t2v, txt2vmg, vid2txt):
     tr1 = 100.0 * len(np.where(ranks < 1)[0]) / len(ranks)
     tr5 = 100.0 * len(np.where(ranks < 5)[0]) / len(ranks)
     tr10 = 100.0 * len(np.where(ranks < 10)[0]) / len(ranks)
-  
+
     #Text->Video 
     ranks = np.zeros(scores_t2v.shape[0])
-    
+
     for index,score in enumerate(scores_t2v):
         inds = np.argsort(score)[::-1]
         ranks[index] = np.where(inds == txt2vmg[index])[0][0]
-    
+
     mdR = np.median(ranks+1)
-        
+
     # Compute metrics
     vr1 = 100.0 * len(np.where(ranks < 1)[0]) / len(ranks)
     vr5 = 100.0 * len(np.where(ranks < 5)[0]) / len(ranks)
@@ -166,17 +166,18 @@ def itm_eval(scores_v2t, scores_t2v, txt2vmg, vid2txt):
     vr_mean = (vr1 + vr5 + vr10) / 3
     r_mean = (tr_mean + vr_mean) / 2
 
-    eval_result =  {'txt_r1': tr1,
-                    'txt_r5': tr5,
-                    'txt_r10': tr10,
-                    'txt_r_mean': tr_mean,
-                    'vid_r1': vr1,
-                    'vid_r5': vr5,
-                    'vid_r10': vr10,
-                    'vid_r_mean': vr_mean,
-                    'vid_mdR': mdR,
-                    'r_mean': r_mean}
-    return eval_result
+    return {
+        'txt_r1': tr1,
+        'txt_r5': tr5,
+        'txt_r10': tr10,
+        'txt_r_mean': tr_mean,
+        'vid_r1': vr1,
+        'vid_r5': vr5,
+        'vid_r10': vr10,
+        'vid_r_mean': vr_mean,
+        'vid_mdR': mdR,
+        'r_mean': r_mean,
+    }
 
 
 
