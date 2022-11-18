@@ -56,11 +56,11 @@ class Predictor(cog.Predictor):
         help="Type caption for the input image for image text matching task.",
     )
     def predict(self, image, task, question, caption):
-        if task == 'visual_question_answering':
-            assert question is not None, 'Please type a question for visual question answering task.'
         if task == 'image_text_matching':
             assert caption is not None, 'Please type a caption for mage text matching task.'
 
+        elif task == 'visual_question_answering':
+            assert question is not None, 'Please type a question for visual question answering task.'
         im = load_image(image, image_size=480 if task == 'visual_question_answering' else 384, device=self.device)
         model = self.models[task]
         model.eval()
@@ -69,19 +69,19 @@ class Predictor(cog.Predictor):
         if task == 'image_captioning':
             with torch.no_grad():
                 caption = model.generate(im, sample=False, num_beams=3, max_length=20, min_length=5)
-                return 'Caption: ' + caption[0]
+                return f'Caption: {caption[0]}'
 
         if task == 'visual_question_answering':
             with torch.no_grad():
                 answer = model(im, question, train=False, inference='generate')
-                return 'Answer: ' + answer[0]
+                return f'Answer: {answer[0]}'
 
         # image_text_matching
         itm_output = model(im, caption, match_head='itm')
         itm_score = torch.nn.functional.softmax(itm_output, dim=1)[:, 1]
         itc_score = model(im, caption, match_head='itc')
         return f'The image and text is matched with a probability of {itm_score.item():.4f}.\n' \
-               f'The image feature and text feature has a cosine similarity of {itc_score.item():.4f}.'
+                   f'The image feature and text feature has a cosine similarity of {itc_score.item():.4f}.'
 
 
 def load_image(image, image_size, device):

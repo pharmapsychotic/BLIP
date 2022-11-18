@@ -72,31 +72,31 @@ class BLIP_Retrieval(nn.Module):
     def forward(self, image, caption, alpha, idx):
         with torch.no_grad():
             self.temp.clamp_(0.001,0.5)
-        
-        image_embeds = self.visual_encoder(image) 
-        image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)        
+
+        image_embeds = self.visual_encoder(image)
+        image_atts = torch.ones(image_embeds.size()[:-1],dtype=torch.long).to(image.device)
         image_feat = F.normalize(self.vision_proj(image_embeds[:,0,:]),dim=-1)    
-        
+
         text = self.tokenizer(caption, padding='max_length', truncation=True, max_length=35, 
                               return_tensors="pt").to(image.device) 
-        
+
         text_output = self.text_encoder(text.input_ids, attention_mask = text.attention_mask,                      
-                                        return_dict = True, mode = 'text')            
+                                        return_dict = True, mode = 'text')
         text_feat = F.normalize(self.text_proj(text_output.last_hidden_state[:,0,:]),dim=-1)        
-        
+
         ###============== Image-text Contrastive Learning ===================###
         idx = idx.view(-1,1)
-        idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()],dim=1)  
-        pos_idx = torch.eq(idx, idx_all).float()       
+        idx_all = torch.cat([idx.t(), self.idx_queue.clone().detach()],dim=1)
+        pos_idx = torch.eq(idx, idx_all).float()
         sim_targets = pos_idx / pos_idx.sum(1,keepdim=True)   
-        
+
         # get momentum features
         with torch.no_grad():
             self._momentum_update()
             image_embeds_m = self.visual_encoder_m(image) 
             image_feat_m = F.normalize(self.vision_proj_m(image_embeds_m[:,0,:]),dim=-1)  
             image_feat_m_all = torch.cat([image_feat_m.t(),self.image_queue.clone().detach()],dim=1)                   
-            
+
             text_output_m = self.text_encoder_m(text.input_ids, attention_mask = text.attention_mask,                      
                                                 return_dict = True, mode = 'text')    
             text_feat_m = F.normalize(self.text_proj_m(text_output_m.last_hidden_state[:,0,:]),dim=-1) 
@@ -108,14 +108,14 @@ class BLIP_Retrieval(nn.Module):
             sim_i2t_targets = alpha * F.softmax(sim_i2t_m, dim=1) + (1 - alpha) * sim_targets
             sim_t2i_targets = alpha * F.softmax(sim_t2i_m, dim=1) + (1 - alpha) * sim_targets        
 
-        sim_i2t = image_feat @ text_feat_m_all / self.temp 
+        sim_i2t = image_feat @ text_feat_m_all / self.temp
         sim_t2i = text_feat @ image_feat_m_all / self.temp 
-                             
+
         loss_i2t = -torch.sum(F.log_softmax(sim_i2t, dim=1)*sim_i2t_targets,dim=1).mean()
         loss_t2i = -torch.sum(F.log_softmax(sim_t2i, dim=1)*sim_t2i_targets,dim=1).mean() 
 
         loss_ita = (loss_i2t+loss_t2i)/2
-        
+
         idxs = concat_all_gather(idx)
         self._dequeue_and_enqueue(image_feat_m, text_feat_m, idxs)        
 
@@ -131,9 +131,13 @@ class BLIP_Retrieval(nn.Module):
                                        encoder_attention_mask = image_atts,      
                                        return_dict = True,
                                       )  
-        
-        
-        if self.negative_all_rank:    
+
+
+        # select a negative image (from all ranks) for each text
+        image_embeds_neg = []
+        text_ids_neg = []
+        text_atts_neg = []
+        if self.negative_all_rank:
             # compute sample similarity
             with torch.no_grad():                
                 mask = torch.eq(idx, idxs.t())
@@ -152,8 +156,6 @@ class BLIP_Retrieval(nn.Module):
 
             image_embeds_world = all_gather_with_grad(image_embeds) 
 
-            # select a negative image (from all ranks) for each text
-            image_embeds_neg = []    
             for b in range(bs):
                 neg_idx = torch.multinomial(weights_t2i[b], 1).item()
                 image_embeds_neg.append(image_embeds_world[neg_idx])
@@ -163,17 +165,15 @@ class BLIP_Retrieval(nn.Module):
             input_ids_world = concat_all_gather(encoder_input_ids)
             att_mask_world = concat_all_gather(text.attention_mask)        
 
-            text_ids_neg = []
-            text_atts_neg = []
             for b in range(bs):
                 neg_idx = torch.multinomial(weights_i2t[b], 1).item()
                 text_ids_neg.append(input_ids_world[neg_idx])
                 text_atts_neg.append(att_mask_world[neg_idx])
-                
+
         else:
             with torch.no_grad():                
                 mask = torch.eq(idx, idx.t())
-                
+
                 sim_i2t = image_feat @ text_feat.t() / self.temp 
                 sim_t2i = text_feat @ image_feat.t() / self.temp 
 
@@ -183,25 +183,20 @@ class BLIP_Retrieval(nn.Module):
                 weights_t2i = F.softmax(sim_t2i,dim=1)
                 weights_t2i.masked_fill_(mask, 0)     
 
-            # select a negative image (from same rank) for each text
-            image_embeds_neg = []    
             for b in range(bs):
                 neg_idx = torch.multinomial(weights_t2i[b], 1).item()
                 image_embeds_neg.append(image_embeds[neg_idx])
             image_embeds_neg = torch.stack(image_embeds_neg,dim=0)   
 
-            # select a negative text (from same rank) for each image    
-            text_ids_neg = []
-            text_atts_neg = []
             for b in range(bs):
                 neg_idx = torch.multinomial(weights_i2t[b], 1).item()
                 text_ids_neg.append(encoder_input_ids[neg_idx])
                 text_atts_neg.append(text.attention_mask[neg_idx])            
-            
-        text_ids_neg = torch.stack(text_ids_neg,dim=0)   
+
+        text_ids_neg = torch.stack(text_ids_neg,dim=0)
         text_atts_neg = torch.stack(text_atts_neg,dim=0)      
 
-        text_ids_all = torch.cat([encoder_input_ids, text_ids_neg],dim=0)     
+        text_ids_all = torch.cat([encoder_input_ids, text_ids_neg],dim=0)
         text_atts_all = torch.cat([text.attention_mask, text_atts_neg],dim=0)     
 
         image_embeds_all = torch.cat([image_embeds_neg,image_embeds],dim=0)
@@ -213,7 +208,7 @@ class BLIP_Retrieval(nn.Module):
                                        encoder_attention_mask = image_atts_all,      
                                        return_dict = True,
                                       )                         
-          
+
 
         vl_embeddings = torch.cat([output_pos.last_hidden_state[:,0,:], output_neg.last_hidden_state[:,0,:]],dim=0)
         vl_output = self.itm_head(vl_embeddings)            
@@ -245,7 +240,7 @@ class BLIP_Retrieval(nn.Module):
         # gather keys before updating queue
         image_feats = concat_all_gather(image_feat)
         text_feats = concat_all_gather(text_feat)
-        
+
 
         batch_size = image_feats.shape[0]
 
@@ -280,8 +275,7 @@ def concat_all_gather(tensor):
         for _ in range(torch.distributed.get_world_size())]
     torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
 
-    output = torch.cat(tensors_gather, dim=0)
-    return output      
+    return torch.cat(tensors_gather, dim=0)      
 
 
 class GatherLayer(torch.autograd.Function):
