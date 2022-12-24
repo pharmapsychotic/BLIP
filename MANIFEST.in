@@ -1,2 +1,4 @@
-include configs/*.json
-include requirements.txt
+include blip/configs/*.*
+requirements.txt
+requirements-dev.txt
+README.md
