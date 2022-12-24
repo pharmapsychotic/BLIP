@@ -1,1 +1,2 @@
-include configs/*
+include configs/*.json
+include requirements.txt
