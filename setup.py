@@ -17,6 +17,6 @@ setup(
         )
     ],
     include_package_data=True,
-    package_data={"mathy_core": ["configs/*.json", "*.json"]},
+    package_data={"blip": ["configs/*.json", "*.json"]},
     extras_require={'dev': ['pytest']},
 )
