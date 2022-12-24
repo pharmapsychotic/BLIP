@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="blip",
-    py_modules=["models"],
+    py_modules=["blip"],
     version="1.0",
     description="",
     author="salesforce",
