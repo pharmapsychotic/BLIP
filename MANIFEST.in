@@ -1,0 +1,4 @@
+include blip/configs/*.*
+requirements.txt
+requirements-dev.txt
+README.md
