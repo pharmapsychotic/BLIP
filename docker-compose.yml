@@ -1,0 +1,80 @@
+version: '3.8'
+services:
+    blip-core:
+        image: ${CORE_IMAGE}
+        container_name: blip-core
+        build:
+            context: .
+            dockerfile: ./build/core/Dockerfile
+            args:
+                - PYTHON_VERSION=${PYTHON_VERSION}
+                - PIP_VERSION=${PIP_VERSION}
+                - PYTORCH_VERSION=${PYTORCH_VERSION}
+                - CUDA_VERSION=${CUDA_VERSION}
+
+    blip-jupyter:
+        image: ${JUPYTER_IMAGE}
+        container_name: blip-jupyter
+        build:
+            context: .
+            dockerfile: ./build/jupyter/Dockerfile
+            args:
+                - CORE_IMAGE=${CORE_IMAGE}
+
+    blip-jupyter-gpu:
+        network_mode: host
+        image: ${JUPYTER_IMAGE}
+        container_name: blip-jupyter
+        build:
+            context: .
+            dockerfile: ./build/jupyter/Dockerfile
+            args:
+                - CORE_IMAGE=${CORE_IMAGE}
+        deploy:
+            resources:
+                reservations:
+                    devices:
+                        - capabilities: [ gpu ]
+        shm_size: '8gb'
+        volumes:
+            - $PWD/${SRC_VOLUME_MOUNT}
+            - $PWD/${NOTEBOOKS_VOLUME_MOUNT}
+            - $PWD/${RESOURCES_VOLUME_MOUNT}
+        env_file:
+            - .env
+
+    blip-jupyter-cpu:
+        network_mode: host
+        image: ${JUPYTER_IMAGE}
+        container_name: blip-jupyter
+        shm_size: '8gb'
+        volumes:
+            - $PWD/${SRC_VOLUME_MOUNT}
+            - $PWD/${NOTEBOOKS_VOLUME_MOUNT}
+            - $PWD/${RESOURCES_VOLUME_MOUNT}
+        env_file:
+            - .env
+
+    blip-vastai:
+        image: ${VASTAI_IMAGE}
+        build:
+            context: .
+            dockerfile: ./build/vastai/Dockerfile
+            args:
+                - JUPYTER_IMAGE=${JUPYTER_IMAGE}
+
+    blip-api:
+        image: ${API_IMAGE}
+        container_name: blip-api
+        network_mode: host
+        volumes:
+            - $PWD/${SRC_VOLUME_MOUNT}
+            - $PWD/${RESOURCES_VOLUME_MOUNT}
+        build:
+            context: .
+            dockerfile: ./build/api/Dockerfile
+            args:
+                - CORE_IMAGE=${CORE_IMAGE}
+        env_file:
+            - .env
+
