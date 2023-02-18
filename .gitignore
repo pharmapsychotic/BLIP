@@ -1,4 +1,7 @@
+*.pyc
 .env/
+blip_ci.egg-info/
+cache/
 build/
-blip.egg-info/
 dist/
+venv/

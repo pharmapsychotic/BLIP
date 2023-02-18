@@ -1,38 +1,35 @@
+import os
 from pathlib import Path
+import pkg_resources
 from setuptools import setup, find_packages
 
-
 def setup_package():
-
-    package_name = "blip"
     root = Path(__file__).parent.resolve()
-    print("roo", root)
-
-    with open(root / "README.md", "r") as fh:
-        long_description = fh.read()
-
-    with open(root / "requirements.txt") as file:
-        REQUIRED_MODULES = [line.strip() for line in file]
 
     with open(root / "requirements-dev.txt") as file:
         DEVELOPMENT_MODULES = [line.strip()
                                for line in file if "-e" not in line]
-
     extras = {"dev": DEVELOPMENT_MODULES}
     extras["all"] = [item for group in extras.values() for item in group]
 
     setup(
-        name=package_name,
-        description="",
+        name="blip-ci",
+        version="0.0.2",
+        license="BSD-3",
         author="salesforce",
         author_email="",
-        url="",
-        version="",
-        license="",
-        long_description=long_description,
+        url="https://github.com/pharmapsychotic/BLIP",
+        description="BLIP library for use with CLIP Interrogator",
+        long_description=open('README.md').read(),
         long_description_content_type="text/markdown",
-        install_requires=REQUIRED_MODULES,
         packages=find_packages(),
+        install_requires=[
+            str(r)
+            for r in pkg_resources.parse_requirements(
+                open(os.path.join(os.path.dirname(__file__), "requirements.txt"))
+            )
+        ],
+        include_package_data=True,
         extras_require=extras,
         classifiers=[
             "Programming Language :: Python :: 3",
@@ -41,7 +38,6 @@ def setup_package():
             "Development Status :: 2 - Pre-Alpha",
         ],
         python_requires=">=3.6",
-        include_package_data=True,
     )
 
 
