@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 def setup_package():
     root = Path(__file__).parent.resolve()
 
-    with open(root / "requirements-dev.txt") as file:
+    with open(root / "requirements-dev.txt", encoding="utf8") as file:
         DEVELOPMENT_MODULES = [line.strip()
                                for line in file if "-e" not in line]
     extras = {"dev": DEVELOPMENT_MODULES}
@@ -20,7 +20,7 @@ def setup_package():
         author_email="",
         url="https://github.com/pharmapsychotic/BLIP",
         description="BLIP library for use with CLIP Interrogator",
-        long_description=open('README.md').read(),
+        long_description=open('README.md', encoding="utf8").read(),
         long_description_content_type="text/markdown",
         packages=find_packages(),
         install_requires=[
