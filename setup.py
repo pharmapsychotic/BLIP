@@ -14,7 +14,7 @@ def setup_package():
 
     setup(
         name="blip-ci",
-        version="0.0.2",
+        version="0.0.4",
         license="BSD-3",
         author="salesforce",
         author_email="",
